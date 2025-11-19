@@ -1,0 +1,82 @@
+[
+  {
+    "id": "1763587491241qfgkgwwc8",
+    "timestamp": 1763587491241,
+    "type": "ADD",
+    "name": "milch",
+    "quantity": 2000,
+    "unit": "ml"
+  },
+  {
+    "id": "176358750106638a7207po",
+    "timestamp": 1763587501066,
+    "type": "ADD",
+    "name": "Äpfel",
+    "quantity": 2,
+    "unit": "stück"
+  },
+  {
+    "id": "1763587508327gpw6ks7ba",
+    "timestamp": 1763587508327,
+    "type": "ADD",
+    "name": "milch",
+    "quantity": 200,
+    "unit": "ml"
+  },
+  {
+    "id": "17635875160141v895mono",
+    "timestamp": 1763587516014,
+    "type": "REMOVE",
+    "name": "Milch",
+    "quantity": 1000,
+    "unit": "ml"
+  },
+  {
+    "id": "1763587529461sqc124v3c",
+    "timestamp": 1763587529461,
+    "type": "ADD",
+    "name": "Malte",
+    "quantity": 1,
+    "unit": "stück"
+  },
+  {
+    "id": "1763587540793gfndz1723",
+    "timestamp": 1763587540793,
+    "type": "ADD",
+    "name": "Joghurt",
+    "quantity": 200,
+    "unit": "ml"
+  },
+  {
+    "id": "17635875498026zkm8kpqy",
+    "timestamp": 1763587549802,
+    "type": "REMOVE",
+    "name": "Joghurt",
+    "quantity": 1,
+    "unit": "stück"
+  },
+  {
+    "id": "1763587743336wlab2p4rj",
+    "timestamp": 1763587743336,
+    "type": "REMOVE",
+    "name": "Joghurt",
+    "quantity": 1,
+    "unit": "stück"
+  },
+  {
+    "id": "176358775315440w6y01w3",
+    "timestamp": 1763587753154,
+    "type": "REMOVE",
+    "name": "Joghurt",
+    "quantity": 1,
+    "unit": "stück"
+  },
+  {
+    "id": "17635888676067hffpyaqa",
+    "timestamp": 1763588867606,
+    "type": "REMOVE",
+    "name": "malte",
+    "quantity": 1,
+    "unit": "stück"
+  }
+]
