@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { put, list } from '@vercel/blob';
 import { sql } from '@vercel/postgres';
 
 export interface Transaction {
@@ -83,6 +84,53 @@ const addTransactionPG = async (transaction: Transaction): Promise<void> => {
   }
 };
 
+// --- BLOB STORAGE IMPLEMENTATION ---
+const BLOB_URL = process.env.BLOB_JSON_URL; // URL to the transactions.json in blob storage
+const BLOB_FILE_NAME = 'transactions.json';
+
+const getTransactionsBlob = async (): Promise<Transaction[]> => {
+  try {
+    // If we have a direct URL, fetch it
+    if (BLOB_URL) {
+      const response = await fetch(BLOB_URL, { cache: 'no-store' });
+      if (!response.ok) {
+        if (response.status === 404) return [];
+        throw new Error(`Failed to fetch blob: ${response.statusText}`);
+      }
+      return await response.json();
+    } 
+    
+    // Otherwise list to find it (slower)
+    const { blobs } = await list({ prefix: BLOB_FILE_NAME, limit: 1 });
+    if (blobs.length > 0) {
+       const response = await fetch(blobs[0].url, { cache: 'no-store' });
+       return await response.json();
+    }
+    
+    return [];
+  } catch (error) {
+    console.error("Error reading transactions (Blob):", error);
+    return [];
+  }
+};
+
+const addTransactionBlob = async (transaction: Transaction): Promise<void> => {
+  try {
+    const transactions = await getTransactionsBlob();
+    transactions.push(transaction);
+    
+    // Overwrite the file in Blob storage
+    await put(BLOB_FILE_NAME, JSON.stringify(transactions, null, 2), { 
+      access: 'public',
+      addRandomSuffix: false // Important to keep the same filename
+    });
+  } catch (error) {
+    console.error("Error saving transaction (Blob):", error);
+    throw error;
+  }
+};
+
+
 // --- LOCAL FILE IMPLEMENTATION ---
 
 const DATA_FILE = path.join(process.cwd(), 'data', 'transactions.json');
@@ -113,6 +161,10 @@ const getTransactionsLocal = async (): Promise<Transaction[]> => {
 };
 
 const addTransactionLocal = async (transaction: Transaction): Promise<void> => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error("Cannot write to local file in production. Please configure Postgres or Blob Storage.");
+  }
+
   try {
     const transactions = await getTransactionsLocal();
     transactions.push(transaction);
@@ -125,13 +177,19 @@ const addTransactionLocal = async (transaction: Transaction): Promise<void> => {
 
 // --- MAIN EXPORTS ---
 
-// Check if running in an environment with Postgres configured
 const USE_POSTGRES = !!process.env.POSTGRES_URL;
+const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
 
 export const getTransactions = async (): Promise<Transaction[]> => {
   if (USE_POSTGRES) {
     return getTransactionsPG();
+  } else if (USE_BLOB) {
+    return getTransactionsBlob();
   } else {
+    if (process.env.NODE_ENV === 'production') {
+       console.warn("Running in production without database connection. Returning empty inventory.");
+       return [];
+    }
     return getTransactionsLocal();
   }
 };
@@ -155,6 +213,8 @@ export const addTransaction = async (type: 'ADD' | 'REMOVE', name: string, quant
 
   if (USE_POSTGRES) {
     await addTransactionPG(newTransaction);
+  } else if (USE_BLOB) {
+    await addTransactionBlob(newTransaction);
   } else {
     await addTransactionLocal(newTransaction);
   }

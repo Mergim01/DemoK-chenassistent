@@ -86,5 +86,13 @@
     "name": "Äpfel",
     "quantity": 2,
     "unit": "stück"
+  },
+  {
+    "id": "1764494428079nn74fdj0e",
+    "timestamp": 1764494428079,
+    "type": "ADD",
+    "name": "Malte",
+    "quantity": 1,
+    "unit": "stück"
   }
 ]
