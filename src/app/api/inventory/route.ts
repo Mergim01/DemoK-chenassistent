@@ -13,6 +13,15 @@ export async function POST(request: Request) {
     
     if (body.command) {
       const parsed = await parseCommand(body.command);
+
+      // CHANGE: Allow returning the parsed command without saving to DB
+      if (body.parseOnly) {
+        return NextResponse.json({ 
+          message: "Parsed successfully", 
+          parsed 
+        });
+      }
+
       let message = "";
 
       if ((parsed.action === 'add' || parsed.action === 'remove') && parsed.item && parsed.quantity) {

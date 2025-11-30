@@ -8,6 +8,16 @@ interface InventoryItem {
   unit?: string;
 }
 
+// NEW: Transaction interface matching the DB one
+interface Transaction {
+  id: string;
+  timestamp: number;
+  type: 'ADD' | 'REMOVE';
+  name: string;
+  quantity: number;
+  unit?: string;
+}
+
 export default function Home() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [isListening, setIsListening] = useState(false);
@@ -16,6 +26,57 @@ export default function Home() {
   
   // Use a ref to keep track of the recognition instance
   const recognitionRef = useRef<any>(null);
+
+  // NEW: Helper to normalize units (copied from db.ts logic)
+  const normalize = (quantity: number, unit?: string): { quantity: number, unit: string } => {
+    if (!unit) return { quantity, unit: 'stück' }; 
+    const u = unit.toLowerCase().trim();
+    if (['kg', 'kilo', 'kilogramm'].includes(u)) return { quantity: quantity * 1000, unit: 'g' };
+    if (['g', 'gramm', 'gr'].includes(u)) return { quantity: quantity, unit: 'g' };
+    if (['l', 'liter'].includes(u)) return { quantity: quantity * 1000, unit: 'ml' };
+    if (['ml', 'milliliter'].includes(u)) return { quantity: quantity, unit: 'ml' };
+    return { quantity, unit: u };
+  };
+
+  // NEW: Calculate inventory from transactions locally
+  const calculateInventory = (transactions: Transaction[]) => {
+    const inventoryMap = new Map<string, { quantity: number, unit: string }>();
+
+    for (const tx of transactions) {
+      const key = tx.name.toLowerCase();
+      if (!inventoryMap.has(key)) {
+        inventoryMap.set(key, { quantity: 0, unit: tx.unit || 'stück' });
+      }
+
+      const current = inventoryMap.get(key)!;
+      
+      if (tx.type === 'ADD') {
+        if (current.quantity === 0) {
+            current.unit = tx.unit || 'stück';
+            current.quantity += tx.quantity;
+        } else {
+            // Simple addition (assuming compatible units for this demo)
+            current.quantity += tx.quantity;
+        }
+      } else if (tx.type === 'REMOVE') {
+        current.quantity -= tx.quantity;
+      }
+    }
+
+    const result: InventoryItem[] = [];
+    inventoryMap.forEach((value, key) => {
+      if (value.quantity > 0) {
+        // Use the capitalized name from the last transaction if possible, else key
+        const lastTx = transactions.slice().reverse().find(t => t.name.toLowerCase() === key);
+        result.push({
+          name: lastTx ? lastTx.name : key,
+          quantity: value.quantity,
+          unit: value.unit
+        });
+      }
+    });
+    return result;
+  };
 
   useEffect(() => {
     fetchInventory();
@@ -54,12 +115,16 @@ export default function Home() {
   }, []);
 
   const fetchInventory = async () => {
+    // CHANGE: Read from localStorage instead of API
     try {
-      const res = await fetch('/api/inventory');
-      const data = await res.json();
-      setInventory(data);
+      const stored = localStorage.getItem('kitchen_transactions');
+      if (stored) {
+        const transactions: Transaction[] = JSON.parse(stored);
+        const calculated = calculateInventory(transactions);
+        setInventory(calculated);
+      }
     } catch (error) {
-      console.error("Failed to fetch inventory", error);
+      console.error("Failed to load local inventory", error);
     }
   };
 
@@ -80,20 +145,46 @@ export default function Home() {
     
     setMessage("Verarbeite...");
     try {
+      // CHANGE: Send parseOnly request
       const res = await fetch('/api/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: transcript }),
+        body: JSON.stringify({ command: transcript, parseOnly: true }),
       });
       
       const data = await res.json();
       
-      if (res.ok) {
-        setMessage(data.message);
-        setInventory(data.inventory);
-        setTranscript(""); // Clear after success
+      if (res.ok && data.parsed && data.parsed.action !== 'unknown') {
+        const parsed = data.parsed;
+        
+        // NEW: Create and save transaction locally
+        const normalized = normalize(parsed.quantity, parsed.unit);
+        
+        const newTransaction: Transaction = {
+          id: Date.now().toString(),
+          timestamp: Date.now(),
+          type: parsed.action === 'add' ? 'ADD' : 'REMOVE',
+          name: parsed.item,
+          quantity: normalized.quantity,
+          unit: normalized.unit
+        };
+
+        // Update Local Storage
+        const stored = localStorage.getItem('kitchen_transactions');
+        const transactions: Transaction[] = stored ? JSON.parse(stored) : [];
+        transactions.push(newTransaction);
+        localStorage.setItem('kitchen_transactions', JSON.stringify(transactions));
+
+        // Update UI
+        const updatedInventory = calculateInventory(transactions);
+        setInventory(updatedInventory);
+        
+        const actionText = parsed.action === 'add' ? 'hinzugefügt' : 'entfernt';
+        setMessage(`Habe ${parsed.quantity} ${parsed.unit ? parsed.unit + ' ' : ''}${parsed.item} ${actionText} (Lokal gespeichert).`);
+        setTranscript(""); 
+
       } else {
-        setMessage("Fehler: " + data.message);
+        setMessage("Konnte den Befehl nicht verstehen oder Fehler beim Parsen.");
       }
     } catch (error) {
       setMessage("Netzwerkfehler beim Senden des Befehls.");
