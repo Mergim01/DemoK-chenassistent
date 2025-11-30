@@ -140,7 +140,18 @@ export default function Home() {
       </div>
 
       <div className="w-full max-w-md bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4 border-b pb-2">Inventar</h2>
+        <div className="flex justify-between items-center mb-4 border-b pb-2">
+          <h2 className="text-xl font-semibold">Inventar</h2>
+          <button 
+            onClick={fetchInventory} 
+            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+            title="Inventar aktualisieren"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+          </button>
+        </div>
         {inventory.length === 0 ? (
           <p className="text-gray-500 text-center py-4">Das Inventar ist leer.</p>
         ) : (
