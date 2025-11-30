@@ -96,7 +96,10 @@ const getTransactionsBlob = async (): Promise<Transaction[]> => {
       const url = new URL(BLOB_URL);
       url.searchParams.set('t', Date.now().toString());
       
-      const response = await fetch(url.toString(), { cache: 'no-store' });
+      const response = await fetch(url.toString(), { 
+        cache: 'no-store',
+        next: { revalidate: 0 } 
+      });
       if (!response.ok) {
         if (response.status === 404) return [];
         throw new Error(`Failed to fetch blob: ${response.statusText}`);
@@ -111,7 +114,10 @@ const getTransactionsBlob = async (): Promise<Transaction[]> => {
        const url = new URL(blobs[0].url);
        url.searchParams.set('t', Date.now().toString());
 
-       const response = await fetch(url.toString(), { cache: 'no-store' });
+       const response = await fetch(url.toString(), { 
+        cache: 'no-store',
+        next: { revalidate: 0 } 
+      });
        return await response.json();
     }
     
