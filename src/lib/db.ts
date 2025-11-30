@@ -122,8 +122,10 @@ const addTransactionBlob = async (transaction: Transaction): Promise<void> => {
     // Overwrite the file in Blob storage
     await put(BLOB_FILE_NAME, JSON.stringify(transactions, null, 2), { 
       access: 'public',
-      addRandomSuffix: false, // Important to keep the same filename
-      token: process.env.BLOB_READ_WRITE_TOKEN // Ensure token is passed to allow overwrite permission check
+      addRandomSuffix: false, 
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      // @ts-ignore - allowOverwrite is supported but might be missing in this type version
+      allowOverwrite: true 
     });
   } catch (error) {
     console.error("Error saving transaction (Blob):", error);
