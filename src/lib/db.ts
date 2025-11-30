@@ -1,76 +1,145 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { sql } from '@vercel/postgres';
 
 export interface Transaction {
   id: string;
   timestamp: number;
   type: 'ADD' | 'REMOVE';
   name: string;
-  quantity: number; // Immer in Basiseinheit oder Rohwert
-  unit?: string;    // Die Einheit der Transaktion (z.B. 'liter')
+  quantity: number;
+  unit?: string;
 }
 
-// Das Ergebnis für das Frontend (aggregierter Zustand)
 export interface InventoryItem {
   name: string;
   quantity: number;
   unit: string;
 }
 
-// Helper zur Normalisierung von Einheiten (wiederverwendet)
 const normalize = (quantity: number, unit?: string): { quantity: number, unit: string } => {
   if (!unit) return { quantity, unit: 'stück' }; 
-
   const u = unit.toLowerCase().trim();
-
-  // Gewicht
   if (['kg', 'kilo', 'kilogramm'].includes(u)) return { quantity: quantity * 1000, unit: 'g' };
   if (['g', 'gramm', 'gr'].includes(u)) return { quantity: quantity, unit: 'g' };
-  
-  // Volumen
   if (['l', 'liter'].includes(u)) return { quantity: quantity * 1000, unit: 'ml' };
   if (['ml', 'milliliter'].includes(u)) return { quantity: quantity, unit: 'ml' };
-
   return { quantity, unit: u };
 };
 
+// --- POSTGRES IMPLEMENTATION ---
+
+async function ensureTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS transactions (
+      id TEXT PRIMARY KEY,
+      timestamp BIGINT,
+      type TEXT,
+      name TEXT,
+      quantity DOUBLE PRECISION,
+      unit TEXT
+    );
+  `;
+}
+
+const getTransactionsPG = async (): Promise<Transaction[]> => {
+  try {
+    const { rows } = await sql`SELECT * FROM transactions ORDER BY timestamp ASC`;
+    return rows.map((row: any) => ({
+      id: row.id,
+      timestamp: Number(row.timestamp),
+      type: row.type as 'ADD' | 'REMOVE',
+      name: row.name,
+      quantity: Number(row.quantity),
+      unit: row.unit || undefined
+    }));
+  } catch (error: any) {
+    if (error.message && (error.message.includes('does not exist') || error.code === '42P01')) {
+      console.log("Table does not exist, creating...");
+      await ensureTable();
+      return [];
+    }
+    console.error("Error reading transactions (PG):", error);
+    return [];
+  }
+};
+
+const addTransactionPG = async (transaction: Transaction): Promise<void> => {
+  try {
+    await sql`
+      INSERT INTO transactions (id, timestamp, type, name, quantity, unit)
+      VALUES (${transaction.id}, ${transaction.timestamp}, ${transaction.type}, ${transaction.name}, ${transaction.quantity}, ${transaction.unit})
+    `;
+  } catch (error: any) {
+     if (error.message && (error.message.includes('does not exist') || error.code === '42P01')) {
+        await ensureTable();
+        await sql`
+          INSERT INTO transactions (id, timestamp, type, name, quantity, unit)
+          VALUES (${transaction.id}, ${transaction.timestamp}, ${transaction.type}, ${transaction.name}, ${transaction.quantity}, ${transaction.unit})
+        `;
+     } else {
+        throw error;
+     }
+  }
+};
+
+// --- LOCAL FILE IMPLEMENTATION ---
+
 const DATA_FILE = path.join(process.cwd(), 'data', 'transactions.json');
 
-// Helper function to ensure data directory and file exist
 async function ensureDataFile() {
   try {
     await fs.access(DATA_FILE);
   } catch {
-    // File doesn't exist, verify directory
     const dir = path.dirname(DATA_FILE);
     try {
       await fs.access(dir);
     } catch {
       await fs.mkdir(dir, { recursive: true });
     }
-    // Create empty array file
     await fs.writeFile(DATA_FILE, '[]', 'utf-8');
   }
 }
 
-// Liest alle Transaktionen
-export const getTransactions = async (): Promise<Transaction[]> => {
+const getTransactionsLocal = async (): Promise<Transaction[]> => {
   try {
     await ensureDataFile();
     const data = await fs.readFile(DATA_FILE, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
-    console.error("Error reading transactions:", error);
+    console.error("Error reading transactions (Local):", error);
     return [];
   }
 };
 
-// Fügt eine neue Transaktion hinzu (egal ob ADD oder REMOVE)
+const addTransactionLocal = async (transaction: Transaction): Promise<void> => {
+  try {
+    const transactions = await getTransactionsLocal();
+    transactions.push(transaction);
+    await fs.writeFile(DATA_FILE, JSON.stringify(transactions, null, 2), 'utf-8');
+  } catch (error) {
+    console.error("Error saving transaction (Local):", error);
+    throw error;
+  }
+};
+
+// --- MAIN EXPORTS ---
+
+// Check if running in an environment with Postgres configured
+const USE_POSTGRES = !!process.env.POSTGRES_URL;
+
+export const getTransactions = async (): Promise<Transaction[]> => {
+  if (USE_POSTGRES) {
+    return getTransactionsPG();
+  } else {
+    return getTransactionsLocal();
+  }
+};
+
 export const addTransaction = async (type: 'ADD' | 'REMOVE', name: string, quantity: number, unit?: string): Promise<Transaction> => {
   const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
   const timestamp = Date.now();
 
-  // Normalisierung VOR dem Speichern anwenden, damit die DB konsistent ist
   const normalized = normalize(quantity, unit);
   const finalQuantity = normalized.quantity;
   const finalUnit = normalized.unit;
@@ -84,25 +153,20 @@ export const addTransaction = async (type: 'ADD' | 'REMOVE', name: string, quant
     unit: finalUnit
   };
 
-  try {
-    const transactions = await getTransactions();
-    transactions.push(newTransaction);
-    await fs.writeFile(DATA_FILE, JSON.stringify(transactions, null, 2), 'utf-8');
-  } catch (error) {
-    console.error("Error saving transaction:", error);
-    throw error;
+  if (USE_POSTGRES) {
+    await addTransactionPG(newTransaction);
+  } else {
+    await addTransactionLocal(newTransaction);
   }
 
   return newTransaction;
 };
 
-// Aggregiert alle Transaktionen zum aktuellen Ist-Stand
 export const getInventory = async (): Promise<InventoryItem[]> => {
   const transactions = await getTransactions();
   const inventoryMap = new Map<string, { quantity: number, unit: string }>();
 
   for (const tx of transactions) {
-    // Key für die Map ist der Name (lowercase)
     const key = tx.name.toLowerCase();
     
     if (!inventoryMap.has(key)) {
@@ -120,19 +184,15 @@ export const getInventory = async (): Promise<InventoryItem[]> => {
       } else {
           current.quantity += tx.quantity;
       }
-
     } else if (tx.type === 'REMOVE') {
       if (current.unit === tx.unit) {
         current.quantity -= tx.quantity;
       } else {
-        if (tx.unit === 'stück' && tx.quantity === 1) {
-             // Ignore specific mismatches logic preserved from original
-        }
+        // Logic for unit mismatches
       }
     }
   }
 
-  // Map in Array umwandeln und leere/negative Items filtern
   const result: InventoryItem[] = [];
   inventoryMap.forEach((value, key) => {
     if (value.quantity > 0) {
