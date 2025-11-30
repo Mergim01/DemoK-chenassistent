@@ -3,7 +3,7 @@ import { getInventory, addTransaction } from '@/lib/db';
 import { parseCommand } from '@/lib/parser';
 
 export async function GET() {
-  const items = getInventory();
+  const items = await getInventory();
   return NextResponse.json(items);
 }
 
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
         const type = parsed.action === 'add' ? 'ADD' : 'REMOVE';
         const actionText = parsed.action === 'add' ? 'hinzugefügt' : 'entfernt';
         
-        addTransaction(type, parsed.item, parsed.quantity, parsed.unit);
+        await addTransaction(type, parsed.item, parsed.quantity, parsed.unit);
         message = `Habe ${parsed.quantity} ${parsed.unit ? parsed.unit + ' ' : ''}${parsed.item} ${actionText}.`;
       } 
       else {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       }
 
       // Nach der Transaktion den neuen aggregierten Stand holen
-      const updatedInventory = getInventory();
+      const updatedInventory = await getInventory();
 
       return NextResponse.json({ 
         message,

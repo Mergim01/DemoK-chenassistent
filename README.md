@@ -5,7 +5,7 @@ Ein einfacher Proof of Concept für einen sprachgesteuerten Küchenassistenten m
 ## Features
 
 - **Spracherkennung:** Nutzt die Web Speech API des Browsers (Chrome/Edge empfohlen).
-- **Datenbank:** Speichert das Inventar in einer lokalen JSON-Datei (`data/inventory.json`).
+- **Datenbank:** Speichert das Inventar in Vercel Postgres (SQL).
 - **Verarbeitung:** Versteht einfache deutsche Befehle wie:
   - "Füge zwei Äpfel hinzu"
   - "Packe 5 Bananen dazu"
@@ -18,13 +18,28 @@ Ein einfacher Proof of Concept für einen sprachgesteuerten Küchenassistenten m
    npm install
    ```
 
-2. **Server starten:**
+2. **Lokale Entwicklung (mit Vercel Postgres):**
+   Um lokal zu entwickeln, müssen Sie die Vercel CLI nutzen und die Umgebungsvariablen ziehen:
    ```bash
+   npm i -g vercel
+   vercel link
+   vercel env pull .env.development.local
    npm run dev
    ```
 
 3. **Browser öffnen:**
    Gehe zu `http://localhost:3000`.
+
+## Deployment auf Vercel
+
+1. Pushen Sie den Code auf GitHub/GitLab/Bitbucket.
+2. Importieren Sie das Projekt in [Vercel](https://vercel.com).
+3. Gehen Sie im Vercel Dashboard zu Ihrem Projekt > **Storage**.
+4. Klicken Sie auf **Connect Store** und wählen Sie **Postgres**.
+5. Erstellen Sie eine neue Datenbank und verknüpfen Sie sie mit dem Projekt ("Connect").
+   - Dies setzt automatisch die notwendigen Umgebungsvariablen (`POSTGRES_URL`, etc.).
+6. Starten Sie ein Deployment (falls nicht automatisch geschehen).
+   - Die Datenbank-Tabelle wird beim ersten Zugriff automatisch erstellt.
 
 ## Nutzung
 
@@ -38,4 +53,4 @@ Ein einfacher Proof of Concept für einen sprachgesteuerten Küchenassistenten m
 - Next.js 15 (App Router)
 - TypeScript
 - Tailwind CSS
-- Lokales JSON als Datenbank
+- Vercel Postgres (@vercel/postgres)
