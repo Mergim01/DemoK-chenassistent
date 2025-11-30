@@ -92,7 +92,11 @@ const getTransactionsBlob = async (): Promise<Transaction[]> => {
   try {
     // If we have a direct URL, fetch it
     if (BLOB_URL) {
-      const response = await fetch(BLOB_URL, { cache: 'no-store' });
+      // Add timestamp to bypass Vercel Edge Cache
+      const url = new URL(BLOB_URL);
+      url.searchParams.set('t', Date.now().toString());
+      
+      const response = await fetch(url.toString(), { cache: 'no-store' });
       if (!response.ok) {
         if (response.status === 404) return [];
         throw new Error(`Failed to fetch blob: ${response.statusText}`);
@@ -101,9 +105,13 @@ const getTransactionsBlob = async (): Promise<Transaction[]> => {
     } 
     
     // Otherwise list to find it (slower)
-    const { blobs } = await list({ prefix: BLOB_FILE_NAME, limit: 1 });
+    const { blobs } = await list({ prefix: BLOB_FILE_NAME, limit: 1, token: process.env.BLOB_READ_WRITE_TOKEN });
     if (blobs.length > 0) {
-       const response = await fetch(blobs[0].url, { cache: 'no-store' });
+       // Add timestamp to bypass Vercel Edge Cache
+       const url = new URL(blobs[0].url);
+       url.searchParams.set('t', Date.now().toString());
+
+       const response = await fetch(url.toString(), { cache: 'no-store' });
        return await response.json();
     }
     
